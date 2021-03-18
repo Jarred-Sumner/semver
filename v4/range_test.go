@@ -284,6 +284,8 @@ func TestExpandWildcardVersion(t *testing.T) {
 		{[][]string{{"!=1.x"}}, [][]string{{"<1.0.0", ">=2.0.0"}}},
 		{[][]string{{"1.2.x"}}, [][]string{{">=1.2.0", "<1.3.0"}}},
 		{[][]string{{"1.x"}}, [][]string{{">=1.0.0", "<2.0.0"}}},
+		{[][]string{{"~1.2.1"}}, [][]string{{"<1.3.0", ">=1.2.1"}}},
+		{[][]string{{"^1.2.1"}}, [][]string{{"<2.0.0", ">=1.2.1"}}},
 	}
 
 	for _, tc := range tests {
@@ -484,6 +486,42 @@ func TestParseRange(t *testing.T) {
 			{"2.0.1", true},
 			{"2.9.9", true},
 			{"3.0.0", false},
+		}}, {"~1.2.2", []tv{
+			{"1.2.1", false},
+			{"1.2.2", true},
+			{"1.2.3", true},
+			{"1.2.4", true},
+			{"1.2.5", true},
+			{"1.2.6", true},
+			{"1.2.7", true},
+			{"1.2.8", true},
+			{"1.2.9", true},
+			{"1.3.0", false},
+			{"1.3.1", false},
+			{"1.3.2", false},
+			{"1.3.3", false},
+			{"2.0.0", false},
+		}}, {"~1.2.2 || ^5.1.0", []tv{
+			{"1.2.1", false},
+			{"1.2.2", true},
+			{"1.2.3", true},
+			{"1.2.4", true},
+			{"1.2.5", true},
+			{"1.2.6", true},
+			{"1.2.7", true},
+			{"1.2.8", true},
+			{"1.2.9", true},
+			{"1.3.0", false},
+			{"1.3.1", false},
+			{"1.3.2", false},
+			{"1.3.3", false},
+			{"2.0.0", false},
+			{"3.0.0", false},
+			{"4.0.0", false},
+			{"5.0.0", false},
+			{"5.1.0", true},
+			{"5.2.0", true},
+			{"6.0.0", false},
 		}},
 	}
 
@@ -539,7 +577,7 @@ func BenchmarkRangeParseAverage(b *testing.B) {
 }
 
 func BenchmarkRangeParseComplex(b *testing.B) {
-	const VERSION = ">=1.0.0 <2.0.0 || >=3.0.1 <4.0.0 !=3.0.3 || >=5.0.0"
+	const VERSION = ">=1.0.0 <2.0.0 || >=3.0.1 <4.0.0 !=3.0.3 || ~5.0.0"
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {

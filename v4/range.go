@@ -238,7 +238,7 @@ func splitAndTrim(s string) (result []string) {
 func splitComparatorVersion(s string) (string, string, error) {
 	i := strings.IndexFunc(s, unicode.IsDigit)
 	if i == -1 {
-		return "", "", fmt.Errorf("Could not get version from string: %q", s)
+		return "", "", fmt.Errorf("could not get version from string: %q", s)
 	}
 	return strings.TrimSpace(s[0:i]), s[i:], nil
 }
@@ -327,7 +327,7 @@ func expandWildcardVersion(parts [][]string) ([][]string, error) {
 	for _, p := range parts {
 		var newParts []string
 		for _, ap := range p {
-			if strings.Contains(ap, "x") {
+			if strings.ContainsAny(ap, "x^~") {
 				opStr, vStr, err := splitComparatorVersion(ap)
 				if err != nil {
 					return nil, err
@@ -339,6 +339,18 @@ func expandWildcardVersion(parts [][]string) ([][]string, error) {
 				var resultOperator string
 				var shouldIncrementVersion bool
 				switch opStr {
+				case "^":
+					{
+						resultOperator = ">="
+						major, _ := strconv.Atoi(flatVersion[0:1])
+						newParts = append(newParts, "<"+strconv.FormatInt(int64(major+1), 10)+".0.0")
+					}
+				case "~":
+					{
+						resultOperator = ">="
+						minor, _ := strconv.Atoi(flatVersion[2:3])
+						newParts = append(newParts, "<"+flatVersion[0:2]+strconv.FormatInt(int64(minor+1), 10)+".0")
+					}
 				case ">":
 					resultOperator = ">="
 					shouldIncrementVersion = true
