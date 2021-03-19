@@ -1,21 +1,31 @@
-semver for golang [![Build Status](https://travis-ci.org/blang/semver.svg?branch=master)](https://travis-ci.org/blang/semver) [![GoDoc](https://godoc.org/github.com/blang/semver/v4?status.svg)](https://godoc.org/github.com/blang/semver/v4) [![Coverage Status](https://img.shields.io/coveralls/blang/semver.svg)](https://coveralls.io/r/blang/semver?branch=master) [![Go Report Card](https://goreportcard.com/badge/github.com/blang/semver)](https://goreportcard.com/report/github.com/blang/semver)
-======
+# semver for golang [![Build Status](https://travis-ci.org/blang/semver.svg?branch=master)](https://travis-ci.org/blang/semver) [![GoDoc](https://godoc.org/github.com/blang/semver/v4?status.svg)](https://godoc.org/github.com/blang/semver/v4) [![Coverage Status](https://img.shields.io/coveralls/blang/semver.svg)](https://coveralls.io/r/blang/semver?branch=master) [![Go Report Card](https://goreportcard.com/badge/github.com/blang/semver)](https://goreportcard.com/report/github.com/blang/semver)
 
 semver is a [Semantic Versioning](http://semver.org/) library written in golang. It fully covers spec version `2.0.0`.
 
-Versioning
-----------
+This fork adds the following features from the original:
+
+- `^1.0.0` caret ranges (often used with npm)
+- `~1.0.0` tilda ranges (often used with npm)
+- `~>1.0.0` "stabby arrow" ranges (often used with Ruby)
+- `1` -> `1.0.0`
+- `2 - 4` -> `>=2.0.0`,`<4.0.0`
+
+I have also updated the benchmarks at the bottom.
+
+## Versioning
+
 Old v1-v3 versions exist in the root of the repository for compatiblity reasons and will only receive bug fixes.
 
-The current stable version is [*v4*](v4/) and is fully go-mod compatible.
+The current stable version is [_v4_](v4/) and is fully go-mod compatible.
 
-Usage
------
+## Usage
+
 ```bash
 $ go get github.com/blang/semver/v4
 # Or use fixed versions
 $ go get github.com/blang/semver/v4@v4.0.0
 ```
+
 Note: Always vendor your dependencies or fix on a specific version tag.
 
 ```go
@@ -27,8 +37,7 @@ v1.Compare(v2)
 
 Also check the [GoDocs](http://godoc.org/github.com/blang/semver/v4).
 
-Why should I use this lib?
------
+## Why should I use this lib?
 
 - Fully spec compatible
 - No reflection
@@ -40,9 +49,7 @@ Why should I use this lib?
 - Uses values instead of pointers
 - Many features, see below
 
-
-Features
------
+## Features
 
 - Parsing and validation at all levels
 - Comparator-like comparisons
@@ -54,8 +61,7 @@ Features
 - database/sql compatible (sql.Scanner/Valuer)
 - encoding/json compatible (json.Marshaler/Unmarshaler)
 
-Ranges
-------
+## Ranges
 
 A `Range` is a set of conditions which specify which versions satisfy the range.
 
@@ -74,18 +80,18 @@ A `Range` can link multiple `Ranges` separated by space:
 
 Ranges can be linked by logical AND:
 
-  - `>1.0.0 <2.0.0` would match between both ranges, so `1.1.1` and `1.8.7` but not `1.0.0` or `2.0.0`
-  - `>1.0.0 <3.0.0 !2.0.3-beta.2` would match every version between `1.0.0` and `3.0.0` except `2.0.3-beta.2`
+- `>1.0.0 <2.0.0` would match between both ranges, so `1.1.1` and `1.8.7` but not `1.0.0` or `2.0.0`
+- `>1.0.0 <3.0.0 !2.0.3-beta.2` would match every version between `1.0.0` and `3.0.0` except `2.0.3-beta.2`
 
 Ranges can also be linked by logical OR:
 
-  - `<2.0.0 || >=3.0.0` would match `1.x.x` and `3.x.x` but not `2.x.x`
+- `<2.0.0 || >=3.0.0` would match `1.x.x` and `3.x.x` but not `2.x.x`
 
 AND has a higher precedence than OR. It's not possible to use brackets.
 
 Ranges can be combined by both AND and OR
 
-  - `>1.0.0 <2.0.0 || >3.0.0 !4.2.1` would match `1.2.3`, `1.9.9`, `3.1.1`, but not `4.2.1`, `2.1.1`
+- `>1.0.0 <2.0.0 || >3.0.0 !4.2.1` would match `1.2.3`, `1.9.9`, `3.1.1`, but not `4.2.1`, `2.1.1`
 
 Range usage:
 
@@ -98,8 +104,7 @@ if expectedRange(v) {
 
 ```
 
-Example
------
+## Example
 
 Have a look at full examples in [v4/examples/main.go](v4/examples/main.go)
 
@@ -156,47 +161,83 @@ if err != nil {
 }
 ```
 
+## Benchmarks
 
-Benchmarks
------
+This fork is about 8% slower than the original:
 
-    BenchmarkParseSimple-4           5000000    390    ns/op    48 B/op   1 allocs/op
-    BenchmarkParseComplex-4          1000000   1813    ns/op   256 B/op   7 allocs/op
-    BenchmarkParseAverage-4          1000000   1171    ns/op   163 B/op   4 allocs/op
-    BenchmarkStringSimple-4         20000000    119    ns/op    16 B/op   1 allocs/op
-    BenchmarkStringLarger-4         10000000    206    ns/op    32 B/op   2 allocs/op
-    BenchmarkStringComplex-4         5000000    324    ns/op    80 B/op   3 allocs/op
-    BenchmarkStringAverage-4         5000000    273    ns/op    53 B/op   2 allocs/op
-    BenchmarkValidateSimple-4      200000000      9.33 ns/op     0 B/op   0 allocs/op
-    BenchmarkValidateComplex-4       3000000    469    ns/op     0 B/op   0 allocs/op
-    BenchmarkValidateAverage-4       5000000    256    ns/op     0 B/op   0 allocs/op
-    BenchmarkCompareSimple-4       100000000     11.8  ns/op     0 B/op   0 allocs/op
-    BenchmarkCompareComplex-4       50000000     30.8  ns/op     0 B/op   0 allocs/op
-    BenchmarkCompareAverage-4       30000000     41.5  ns/op     0 B/op   0 allocs/op
-    BenchmarkSort-4                  3000000    419    ns/op   256 B/op   2 allocs/op
-    BenchmarkRangeParseSimple-4      2000000    850    ns/op   192 B/op   5 allocs/op
-    BenchmarkRangeParseAverage-4     1000000   1677    ns/op   400 B/op  10 allocs/op
-    BenchmarkRangeParseComplex-4      300000   5214    ns/op  1440 B/op  30 allocs/op
-    BenchmarkRangeMatchSimple-4     50000000     25.6  ns/op     0 B/op   0 allocs/op
-    BenchmarkRangeMatchAverage-4    30000000     56.4  ns/op     0 B/op   0 allocs/op
-    BenchmarkRangeMatchComplex-4    10000000    153    ns/op     0 B/op   0 allocs/op
+```
+goos: darwin
+goarch: amd64
+pkg: github.com/Jarred-Sumner/semver/v4
+cpu: Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz
+BenchmarkRangeParseSimple-16        	 2402451	       493.4 ns/op	     224 B/op	       7 allocs/op
+BenchmarkRangeParseAverage-16       	 1235457	       967.9 ns/op	     456 B/op	      13 allocs/op
+BenchmarkRangeParseComplex-16       	  392412	      3129 ns/op	    1736 B/op	      39 allocs/op
+BenchmarkRangeMatchSimple-16        	100000000	        11.32 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRangeMatchAverage-16       	48316423	        25.28 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRangeMatchComplex-16       	17318359	        70.28 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRangeMatchNPM-16           	27442455	        43.70 ns/op	       0 B/op	       0 allocs/op
+BenchmarkParseSimple-16             	 8453367	       139.5 ns/op	      48 B/op	       1 allocs/op
+BenchmarkParseComplex-16            	 1795279	       687.0 ns/op	     256 B/op	       7 allocs/op
+BenchmarkParseAverage-16            	 2672629	       466.3 ns/op	     163 B/op	       4 allocs/op
+BenchmarkParseTolerantAverage-16    	 3093957	       394.1 ns/op	     132 B/op	       4 allocs/op
+BenchmarkStringSimple-16            	40966444	        30.76 ns/op	       5 B/op	       1 allocs/op
+BenchmarkStringLarger-16            	17750650	        65.63 ns/op	      32 B/op	       2 allocs/op
+BenchmarkStringComplex-16           	12103804	        98.85 ns/op	      80 B/op	       3 allocs/op
+BenchmarkStringAverage-16           	13836576	        89.55 ns/op	      45 B/op	       2 allocs/op
+BenchmarkValidateSimple-16          	441872518	         2.589 ns/op	       0 B/op	   0 allocs/op
+BenchmarkValidateComplex-16         	 7224438	       151.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidateAverage-16         	13011160	        88.88 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompareSimple-16           	309173464	         3.999 ns/op	       0 B/op	   0 allocs/op
+BenchmarkCompareComplex-16          	82620462	        12.37 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompareAverage-16          	68264864	        17.24 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSort-16                    	 7555494	       160.2 ns/op	     248 B/op	       2 allocs/op
+PASS
+ok  	github.com/Jarred-Sumner/semver/v4	31.099s
+```
+
+Original:
+
+```
+goos: darwin
+goarch: amd64
+pkg: github.com/blang/semver/v4
+cpu: Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz
+BenchmarkRangeParseSimple-16        	 2580975	       453.4 ns/op	     224 B/op	       7 allocs/op
+BenchmarkRangeParseAverage-16       	 1339657	       920.7 ns/op	     456 B/op	      13 allocs/op
+BenchmarkRangeParseComplex-16       	  407686	      2845 ns/op	    1736 B/op	      39 allocs/op
+BenchmarkRangeMatchSimple-16        	100000000	        11.10 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRangeMatchAverage-16       	44137429	        24.07 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRangeMatchComplex-16       	17746507	        66.63 ns/op	       0 B/op	       0 allocs/op
+BenchmarkParseSimple-16             	 9203169	       129.8 ns/op	      48 B/op	       1 allocs/op
+BenchmarkParseComplex-16            	 1875487	       624.6 ns/op	     256 B/op	       7 allocs/op
+BenchmarkParseAverage-16            	 2838685	       426.4 ns/op	     163 B/op	       4 allocs/op
+BenchmarkParseTolerantAverage-16    	 3281038	       375.9 ns/op	     132 B/op	       4 allocs/op
+BenchmarkStringSimple-16            	40971831	        28.91 ns/op	       5 B/op	       1 allocs/op
+BenchmarkStringLarger-16            	18104654	        65.11 ns/op	      32 B/op	       2 allocs/op
+BenchmarkStringComplex-16           	11883522	        97.92 ns/op	      80 B/op	       3 allocs/op
+BenchmarkStringAverage-16           	13932410	        87.39 ns/op	      45 B/op	       2 allocs/op
+BenchmarkValidateSimple-16          	473300133	         2.546 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidateComplex-16         	 8035316	       148.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidateAverage-16         	13491339	        88.06 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompareSimple-16           	310534528	         3.861 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompareComplex-16          	84087928	        12.82 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompareAverage-16          	67448468	        16.62 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSort-16                    	 7902789	       156.0 ns/op	     248 B/op	       2 allocs/op
+PASS
+ok  	github.com/blang/semver/v4	29.348s
+```
 
 See benchmark cases at [semver_test.go](semver_test.go)
 
-
-Motivation
------
+## Motivation
 
 I simply couldn't find any lib supporting the full spec. Others were just wrong or used reflection and regex which i don't like.
 
-
-Contribution
------
+## Contribution
 
 Feel free to make a pull request. For bigger changes create a issue first to discuss about it.
 
-
-License
------
+## License
 
 See [LICENSE](LICENSE) file.
