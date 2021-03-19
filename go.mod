@@ -1,3 +1,3 @@
-module github.com/blang/semver
+module github.com/Jarred-Sumner/semver
 
-go 1.12
+go 1.16

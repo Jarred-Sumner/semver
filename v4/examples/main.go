@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/blang/semver/v4"
+	"github.com/Jarred-Sumner/semver/v4"
 )
 
 func main() {

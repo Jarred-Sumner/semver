@@ -1,3 +1,3 @@
-module github.com/blang/semver/v4
+module github.com/Jarred-Sumner/semver/v4
 
-go 1.14
+go 1.16

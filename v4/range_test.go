@@ -221,10 +221,11 @@ func TestCreateVersionFromWildcard(t *testing.T) {
 		{"1.2.x", "1.2.0"},
 		{"1.x", "1.0.0"},
 	}
-
+	p := [3]string{"", "", ""}
 	for _, tc := range tests {
-		p := createVersionFromWildcard(tc.i)
-		if p != tc.s {
+		createVersionFromWildcard(tc.i, &p)
+
+		if joinTriple(p, ".") != tc.s {
 			t.Errorf("Invalid for case %q: Expected %q, got: %q", tc.i, tc.s, p)
 		}
 	}
@@ -241,7 +242,26 @@ func TestIncrementMajorVersion(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		p, _ := incrementMajorVersion(tc.i)
+		parts := [3]string{"", "", ""}
+		segments := strings.Split(tc.i, ".")
+		switch len(segments) {
+		case 1:
+			{
+				parts[0] = segments[0]
+			}
+		case 2:
+			{
+				parts[1] = segments[1]
+				parts[0] = segments[0]
+			}
+		case 3:
+			{
+				parts[1] = segments[1]
+				parts[0] = segments[0]
+				parts[2] = segments[2]
+			}
+		}
+		p, _ := incrementMajorVersion(parts)
 		if p != tc.s {
 			t.Errorf("Invalid for case %q: Expected %q, got: %q", tc.i, tc.s, p)
 		}
@@ -259,7 +279,26 @@ func TestIncrementMinorVersion(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		p, _ := incrementMinorVersion(tc.i)
+		parts := [3]string{"", "", ""}
+		segments := strings.Split(tc.i, ".")
+		switch len(segments) {
+		case 1:
+			{
+				parts[0] = segments[0]
+			}
+		case 2:
+			{
+				parts[1] = segments[1]
+				parts[0] = segments[0]
+			}
+		case 3:
+			{
+				parts[1] = segments[1]
+				parts[0] = segments[0]
+				parts[2] = segments[2]
+			}
+		}
+		p, _ := incrementMinorVersion(parts)
 		if p != tc.s {
 			t.Errorf("Invalid for case %q: Expected %q, got: %q", tc.i, tc.s, p)
 		}
@@ -286,6 +325,19 @@ func TestExpandWildcardVersion(t *testing.T) {
 		{[][]string{{"1.x"}}, [][]string{{">=1.0.0", "<2.0.0"}}},
 		{[][]string{{"~1.2.1"}}, [][]string{{"<1.3.0", ">=1.2.1"}}},
 		{[][]string{{"^1.2.1"}}, [][]string{{"<2.0.0", ">=1.2.1"}}},
+		{[][]string{{"~>1.2.x"}}, [][]string{{">=1.2.0"}}},
+		{[][]string{{"~>1.x"}}, [][]string{{">=1.0.0"}}},
+		{[][]string{{"1.*"}}, [][]string{{">=1.0.0", "<2.0.0"}}},
+		{[][]string{{"1.2.*"}}, [][]string{{">=1.2.0", "<1.3.0"}}},
+		{[][]string{{"*"}}, [][]string{{">=0.0.0"}}},
+		{[][]string{{"8.0.0 - 10.0.0"}}, [][]string{{"<10.0.0", ">=8.0.0"}}},
+		{[][]string{{"8 - 10"}}, [][]string{{"<10.0.0", ">=8.0.0"}}},
+		{[][]string{{"8 - 10.1"}}, [][]string{{"<10.1.0", ">=8.0.0"}}},
+		{[][]string{{" 8 "}}, [][]string{{"8.0.0"}}},
+		{[][]string{{" 800000 "}}, [][]string{{"800000.0.0"}}},
+		{[][]string{{" ~7.x "}}, [][]string{{"<8.0.0", ">=7.0.0"}}},
+		{[][]string{{" ~7.0.x "}}, [][]string{{"<7.1.0", ">=7.0.0"}}},
+		{[][]string{{" ~* "}}, [][]string{{">=0.0.0"}}},
 	}
 
 	for _, tc := range tests {
@@ -577,7 +629,7 @@ func BenchmarkRangeParseAverage(b *testing.B) {
 }
 
 func BenchmarkRangeParseComplex(b *testing.B) {
-	const VERSION = ">=1.0.0 <2.0.0 || >=3.0.1 <4.0.0 !=3.0.3 || ~5.0.0"
+	const VERSION = ">=1.0.0 <2.0.0 || >=3.0.1 <4.0.0 !=3.0.3 || >=5.0.0"
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
@@ -609,6 +661,17 @@ func BenchmarkRangeMatchAverage(b *testing.B) {
 
 func BenchmarkRangeMatchComplex(b *testing.B) {
 	const VERSION = ">=1.0.0 <2.0.0 || >=3.0.1 <4.0.0 !=3.0.3 || >=5.0.0"
+	r, _ := ParseRange(VERSION)
+	v := MustParse("5.0.1")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		r(v)
+	}
+}
+
+func BenchmarkRangeMatchNPM(b *testing.B) {
+	const VERSION = "^1.0.0 || ~5.0.0"
 	r, _ := ParseRange(VERSION)
 	v := MustParse("5.0.1")
 	b.ReportAllocs()
