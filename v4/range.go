@@ -200,38 +200,58 @@ func inArray(s byte, list []byte) bool {
 	return false
 }
 
-var excludeFromSplit = []byte{'>', '<', '='}
+// 62 => <
+// 60 => >
+// 61 => =
+var excludeFromSplit = [...]byte{62, 60, 61}
 
 // splitAndTrim splits a range string by spaces and cleans whitespaces
-func splitAndTrim(s string) (result []string) {
-	last := 0
-	var lastChar byte
+func splitAndTrim(s string) []string {
+	var lastChar rune
+	// var lastChar byte
 
-	for i := 0; i < len(s); i++ {
-		if s[i] == ' ' && !inArray(lastChar, excludeFromSplit) {
-			if last < i-1 {
-				result = append(result, s[last:i])
-			}
-			last = i + 1
-		} else if s[i] != ' ' {
-			lastChar = s[i]
+	// First lets count the number of non-consecutive spaces
+	count := 1
+	var i int
+	var r rune
+
+	for i, r = range s {
+		if i > 0 && r == ' ' && lastChar != ' ' && lastChar != '<' && lastChar != '>' && lastChar != '=' {
+			count++
 		}
-	}
-	if last < len(s)-1 {
-		result = append(result, s[last:])
+		lastChar = r
 	}
 
-	for i, v := range result {
-		result[i] = strings.Replace(v, " ", "", -1)
+	if i > 0 && lastChar != ' ' && lastChar != '<' && lastChar != '>' && lastChar != '=' {
+		count++
 	}
 
-	// parts := strings.Split(s, " ")
-	// for _, x := range parts {
-	// 	if s := strings.TrimSpace(x); len(s) != 0 {
-	// 		result = append(result, s)
-	// 	}
-	// }
-	return
+	lastChar = 0
+
+	result := make([]string, 0, count)
+	head := 0
+
+	for i, r = range s {
+		// Next part!
+		if i > 0 && r == ' ' && lastChar != ' ' && lastChar != '<' && lastChar != '>' && lastChar != '=' {
+			// TODO: use string builder to prevent memory allocations
+			result = append(result, strings.ReplaceAll(s[head:i], " ", ""))
+			head = i
+		}
+		lastChar = r
+	}
+
+	if i > 0 && lastChar != ' ' && lastChar != '<' && lastChar != '>' && lastChar != '=' {
+
+		// TODO: use string builder to prevent memory allocations
+		content := strings.ReplaceAll(s[head:i+1], " ", "")
+		if content != "" {
+			result = append(result, content)
+		}
+
+	}
+
+	return result
 }
 
 // Does not support non-latin1 numbers
@@ -321,24 +341,16 @@ func normalizeVersionPart(part string) string {
 	return b.String()
 }
 
-var partI int
-var partStartI int = -1
-var lastCharI int
-
-var _wildcard wildcardType
-
-var defaultParts = [3]string{"0", "0", "0"}
-var secondaryParts = [3]string{"0", "0", "0"}
-
 // createVersionFromWildcard will convert a wildcard version
 // into a regular version, replacing 'x's with '0's, handling
 // special cases like '1.x.x' and '1.x'
-func createVersionFromWildcard(vStr string, parts *[3]string) wildcardType {
+func createVersionFromWildcard(vStr string) ([3]string, wildcardType) {
+	parts := [3]string{"0", "0", "0"}
+	partI := 0
+	partStartI := -1
+	lastCharI := 0
+	_wildcard := noneWildcard
 
-	partStartI = -1
-	lastCharI = 0
-	partI = 0
-	_wildcard = noneWildcard
 	for i, char := range vStr {
 
 		switch char {
@@ -353,6 +365,9 @@ func createVersionFromWildcard(vStr string, parts *[3]string) wildcardType {
 		case '.':
 			{
 				if partStartI > -1 {
+					if partI > 2 {
+						break
+					}
 					parts[partI] = normalizeVersionPart(vStr[partStartI:i])
 					partStartI = -1
 					partI++
@@ -385,13 +400,29 @@ func createVersionFromWildcard(vStr string, parts *[3]string) wildcardType {
 		}
 	}
 
-	if partI > 2 {
-		partI = 2
+	// Where did we leave off?
+	switch partI {
+
+	// That means they used a match like this:
+	// "1"
+	// So its a wildcard minor
+	case 0:
+		{
+			_wildcard = minorWildcard
+			parts[0] = normalizeVersionPart(vStr[partStartI : lastCharI+1])
+		}
+
+	default:
+		{
+			if partI > 2 {
+				partI = 2
+			}
+
+			parts[partI] = normalizeVersionPart(vStr[partStartI : lastCharI+1])
+		}
 	}
 
-	parts[partI] = normalizeVersionPart(vStr[partStartI : lastCharI+1])
-
-	return _wildcard
+	return parts, _wildcard
 }
 
 func joinTriple(elems [3]string, sep string) string {
@@ -421,8 +452,6 @@ func joinTriple(elems [3]string, sep string) string {
 
 }
 
-var cachedParts = [3]string{"", "", ""}
-
 // incrementMajorVersion will increment the major version
 // of the passed version
 func incrementMajorVersion(parts [3]string) (string, error) {
@@ -447,10 +476,6 @@ func incrementMinorVersion(parts [3]string) (string, error) {
 
 	return joinTriple(parts, "."), nil
 }
-
-var zeroTriple = [3]string{"0", "0", "0"}
-var resultOperator string = ""
-var shouldIncrementVersion bool = false
 
 // expandWildcardVersion will expand wildcards inside versions
 // following these rules:
@@ -478,6 +503,7 @@ var shouldIncrementVersion bool = false
 // 1.*         will become    >= 1.0.0 < 2.0.0
 func expandWildcardVersion(parts [][]string) ([][]string, error) {
 	var expandedParts [][]string
+
 	for _, p := range parts {
 		var newParts []string
 		for _, ap := range p {
@@ -487,15 +513,16 @@ func expandWildcardVersion(parts [][]string) ([][]string, error) {
 					return nil, err
 				}
 
-				versionWildcardType := createVersionFromWildcard(vStr, &defaultParts)
-				resultOperator = ""
-				shouldIncrementVersion = false
+				var cachedParts = [3]string{"", "", ""}
+				defaultParts, versionWildcardType := createVersionFromWildcard(vStr)
+				var resultOperator string = ""
+				var shouldIncrementVersion bool = false
 
 				switch opStr {
 				case "-":
 					{
 						resultOperator = ">="
-						createVersionFromWildcard(strings.TrimSpace(ap[strings.IndexRune(ap, '-')+1:]), &secondaryParts)
+						secondaryParts, _ := createVersionFromWildcard(strings.TrimSpace(ap[strings.IndexRune(ap, '-')+1:]))
 						newParts = append(newParts, "<"+joinTriple(secondaryParts, "."))
 					}
 				case "^":
@@ -583,7 +610,7 @@ func expandWildcardVersion(parts [][]string) ([][]string, error) {
 				newParts = append(newParts, resultOperator+resultVersion)
 				// Handle "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"
 			} else if isNumbersOrSpacesOnly(ap) {
-				createVersionFromWildcard(ap, &defaultParts)
+				defaultParts, _ := createVersionFromWildcard(ap)
 				newParts = append(newParts, joinTriple(defaultParts, "."))
 			} else {
 				newParts = append(newParts, ap)

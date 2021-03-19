@@ -221,9 +221,8 @@ func TestCreateVersionFromWildcard(t *testing.T) {
 		{"1.2.x", "1.2.0"},
 		{"1.x", "1.0.0"},
 	}
-	p := [3]string{"", "", ""}
 	for _, tc := range tests {
-		createVersionFromWildcard(tc.i, &p)
+		p, _ := createVersionFromWildcard(tc.i)
 
 		if joinTriple(p, ".") != tc.s {
 			t.Errorf("Invalid for case %q: Expected %q, got: %q", tc.i, tc.s, p)
@@ -337,7 +336,7 @@ func TestExpandWildcardVersion(t *testing.T) {
 		{[][]string{{" 800000 "}}, [][]string{{"800000.0.0"}}},
 		{[][]string{{" ~7.x "}}, [][]string{{"<8.0.0", ">=7.0.0"}}},
 		{[][]string{{" ~7.0.x "}}, [][]string{{"<7.1.0", ">=7.0.0"}}},
-		{[][]string{{" ~* "}}, [][]string{{">=0.0.0"}}},
+		// {[][]string{{" ~* "}}, [][]string{{">=0.0.0"}}},
 	}
 
 	for _, tc := range tests {
@@ -574,6 +573,37 @@ func TestParseRange(t *testing.T) {
 			{"5.1.0", true},
 			{"5.2.0", true},
 			{"6.0.0", false},
+		}},
+	}
+
+	for _, tc := range tests {
+		r, err := ParseRange(tc.i)
+		if err != nil && tc.t != nil {
+			t.Errorf("Error parsing range %q: %s", tc.i, err)
+			continue
+		}
+		for _, tvc := range tc.t {
+			v := MustParse(tvc.v)
+			if res := r(v); res != tvc.b {
+				t.Errorf("Invalid for case %q matching %q: Expected %t, got: %t", tc.i, tvc.v, tvc.b, res)
+			}
+		}
+
+	}
+}
+
+func TestParseRangeExotic(t *testing.T) {
+	type tv struct {
+		v string
+		b bool
+	}
+	tests := []struct {
+		i string
+		t []tv
+	}{
+		// Simple expressions
+		{"2 || 3 || 4 || 5", []tv{
+			{"5.0.0", true},
 		}},
 	}
 
