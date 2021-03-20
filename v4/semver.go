@@ -274,17 +274,18 @@ func Parse(s string) (Version, error) {
 	}
 
 	// Split into major.minor.(patch+pr+meta)
-	parts := strings.SplitN(s, ".", 3)
-	if len(parts) != 3 {
-		return Version{}, errors.New("No Major.Minor.Patch elements found")
+	parts, _, isValid := createVersionFromWildcard(s)
+
+	if !isValid {
+		return Version{}, errors.New("no Major.Minor.Patch elements found")
 	}
 
 	// Major
 	if !containsOnly(parts[0], numbers) {
-		return Version{}, fmt.Errorf("Invalid character(s) found in major number %q", parts[0])
+		return Version{}, fmt.Errorf("invalid character(s) found in major number %q", parts[0])
 	}
 	if hasLeadingZeroes(parts[0]) {
-		return Version{}, fmt.Errorf("Major number must not contain leading zeroes %q", parts[0])
+		return Version{}, fmt.Errorf("major number must not contain leading zeroes %q", parts[0])
 	}
 	major, err := strconv.ParseUint(parts[0], 10, 64)
 	if err != nil {
@@ -303,21 +304,22 @@ func Parse(s string) (Version, error) {
 		return Version{}, err
 	}
 
-	v := Version{}
-	v.Major = major
-	v.Minor = minor
+	v := Version{
+		Major: major,
+		Minor: minor,
+	}
 
 	var build, prerelease []string
 	patchStr := parts[2]
+	buildStr := parts[3]
 
-	if buildIndex := strings.IndexRune(patchStr, '+'); buildIndex != -1 {
-		build = strings.Split(patchStr[buildIndex+1:], ".")
-		patchStr = patchStr[:buildIndex]
+	if buildIndex := strings.IndexRune(buildStr, '+'); buildIndex != -1 {
+		build = strings.Split(buildStr[buildIndex+1:], ".")
+		buildStr = parts[3][:buildIndex]
 	}
 
-	if preIndex := strings.IndexRune(patchStr, '-'); preIndex != -1 {
-		prerelease = strings.Split(patchStr[preIndex+1:], ".")
-		patchStr = patchStr[:preIndex]
+	if preIndex := strings.IndexRune(buildStr, '-'); preIndex != -1 {
+		prerelease = strings.Split(buildStr[preIndex+1:], ".")
 	}
 
 	if !containsOnly(patchStr, numbers) {

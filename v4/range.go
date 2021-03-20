@@ -15,19 +15,6 @@ const (
 	patchWildcard wildcardType = 3
 )
 
-func wildcardTypefromInt(i int) wildcardType {
-	switch i {
-	case 1:
-		return majorWildcard
-	case 2:
-		return minorWildcard
-	case 3:
-		return patchWildcard
-	default:
-		return noneWildcard
-	}
-}
-
 type comparator func(Version, Version) bool
 
 var (
@@ -190,21 +177,6 @@ func buildVersionRange(opStr, vStr string) (*versionRange, error) {
 
 }
 
-// inArray checks if a byte is contained in an array of bytes
-func inArray(s byte, list []byte) bool {
-	for _, el := range list {
-		if el == s {
-			return true
-		}
-	}
-	return false
-}
-
-// 62 => <
-// 60 => >
-// 61 => =
-var excludeFromSplit = [...]byte{62, 60, 61}
-
 // splitAndTrim splits a range string by spaces and cleans whitespaces
 func splitAndTrim(s string) []string {
 	var lastChar rune
@@ -278,7 +250,7 @@ func splitComparatorVersion(s string) (string, string, error) {
 
 	var i int
 	i = strings.IndexRune(s, '-')
-	if i != -1 {
+	if i != -1 && !strings.ContainsAny(s, "^+|><=") {
 		return "-", strings.TrimSpace(s[0:i]), nil
 	}
 
@@ -287,21 +259,6 @@ func splitComparatorVersion(s string) (string, string, error) {
 		return "", "", fmt.Errorf("could not get version from string: %q", s)
 	}
 	return strings.TrimSpace(s[0:i]), strings.TrimSpace(s[i:]), nil
-}
-
-// getWildcardType will return the type of wildcard that the
-// passed version contains
-func getWildcardType(vStr string) wildcardType {
-	parts := strings.Split(vStr, ".")
-	nparts := len(parts)
-	wildcard := parts[nparts-1]
-
-	possibleWildcardType := wildcardTypefromInt(nparts)
-	if wildcard == "x" || wildcard == "*" {
-		return possibleWildcardType
-	}
-
-	return noneWildcard
 }
 
 func normalizeVersionPart(part string) string {
@@ -341,36 +298,64 @@ func normalizeVersionPart(part string) string {
 	return b.String()
 }
 
+type versionParts = [4]string
+
 // createVersionFromWildcard will convert a wildcard version
 // into a regular version, replacing 'x's with '0's, handling
 // special cases like '1.x.x' and '1.x'
-func createVersionFromWildcard(vStr string) ([3]string, wildcardType) {
-	parts := [3]string{"0", "0", "0"}
+func createVersionFromWildcard(vStr string) (versionParts, wildcardType, bool) {
+	parts := [4]string{"0", "0", "0", ""}
 	partI := 0
 	partStartI := -1
 	lastCharI := 0
 	_wildcard := noneWildcard
+	isValid := true
+	isDone := false
 
 	for i, char := range vStr {
+		if isDone {
+			break
+		}
 
 		switch char {
+		case ' ':
+			{
+
+			}
 		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 			{
 				if partStartI == -1 {
 					partStartI = i
 				}
 				lastCharI = i
-				continue
 			}
+
 		case '.':
 			{
-				if partStartI > -1 {
-					if partI > 2 {
-						break
-					}
+				if partStartI > -1 && partI <= 2 {
 					parts[partI] = normalizeVersionPart(vStr[partStartI:i])
 					partStartI = -1
 					partI++
+					// "fo.o.b.ar"
+				} else if partI > 2 || partStartI == -1 {
+					isValid = false
+					isDone = true
+					break
+				}
+			}
+		case '-', '+':
+			{
+				if partI == 2 && partStartI > -1 {
+					parts[partI] = normalizeVersionPart(vStr[partStartI:i])
+					_wildcard = noneWildcard
+					partStartI = i
+					partI = 3
+					isDone = true
+					break
+				} else {
+					isValid = false
+					isDone = true
+					break
 				}
 			}
 		case 'x', '*':
@@ -397,7 +382,27 @@ func createVersionFromWildcard(vStr string) ([3]string, wildcardType) {
 					}
 				}
 			}
+
+		default:
+			{
+				lastCharI = 0
+				isValid = false
+				isDone = true
+				break
+			}
 		}
+	}
+
+	if isValid {
+		isValid = partI > -1
+	}
+
+	if partStartI == -1 {
+		partStartI = 0
+	}
+
+	if lastCharI == -1 || partStartI > lastCharI {
+		lastCharI = len(vStr) - 1
 	}
 
 	// Where did we leave off?
@@ -408,24 +413,30 @@ func createVersionFromWildcard(vStr string) ([3]string, wildcardType) {
 	// So its a wildcard minor
 	case 0:
 		{
-			_wildcard = minorWildcard
+			if _wildcard == noneWildcard {
+				_wildcard = minorWildcard
+			}
+
 			parts[0] = normalizeVersionPart(vStr[partStartI : lastCharI+1])
+
+		}
+
+	case 3:
+		{
+			parts[3] = vStr[partStartI:]
 		}
 
 	default:
 		{
-			if partI > 2 {
-				partI = 2
-			}
 
 			parts[partI] = normalizeVersionPart(vStr[partStartI : lastCharI+1])
 		}
 	}
 
-	return parts, _wildcard
+	return parts, _wildcard, isValid
 }
 
-func joinTriple(elems [3]string, sep string) string {
+func joinParts(elems versionParts, sep string) string {
 	if elems[0] == "" {
 		return "0.0.0"
 	}
@@ -440,7 +451,7 @@ func joinTriple(elems [3]string, sep string) string {
 		b.WriteString(sep)
 		b.WriteString(elems[1])
 		return b.String()
-	} else {
+	} else if elems[3] == "" {
 		b.Grow(len(elems[0]) + len(elems[1]) + len(elems[2]) + len(sep)*2)
 		b.WriteString(elems[0])
 		b.WriteString(sep)
@@ -448,25 +459,34 @@ func joinTriple(elems [3]string, sep string) string {
 		b.WriteString(sep)
 		b.WriteString(elems[2])
 		return b.String()
+	} else {
+		b.Grow(len(elems[0]) + len(elems[1]) + len(elems[2]) + len(elems[3]) + len(sep)*2)
+		b.WriteString(elems[0])
+		b.WriteString(sep)
+		b.WriteString(elems[1])
+		b.WriteString(sep)
+		b.WriteString(elems[2])
+		b.WriteString(elems[3])
+		return b.String()
 	}
 
 }
 
 // incrementMajorVersion will increment the major version
 // of the passed version
-func incrementMajorVersion(parts [3]string) (string, error) {
+func incrementMajorVersion(parts versionParts) (string, error) {
 	i, err := strconv.Atoi(parts[0])
 	if err != nil {
 		return "", err
 	}
 	parts[0] = strconv.Itoa(i + 1)
 
-	return joinTriple(parts, "."), nil
+	return joinParts(parts, "."), nil
 }
 
 // incrementMajorVersion will increment the minor version
 // of the passed version
-func incrementMinorVersion(parts [3]string) (string, error) {
+func incrementMinorVersion(parts versionParts) (string, error) {
 	i, err := strconv.Atoi(parts[1])
 	if err != nil {
 		return "", err
@@ -474,7 +494,7 @@ func incrementMinorVersion(parts [3]string) (string, error) {
 	parts[1] = strconv.Itoa(i + 1)
 	// parts[2] = "0"
 
-	return joinTriple(parts, "."), nil
+	return joinParts(parts, "."), nil
 }
 
 // expandWildcardVersion will expand wildcards inside versions
@@ -513,8 +533,8 @@ func expandWildcardVersion(parts [][]string) ([][]string, error) {
 					return nil, err
 				}
 
-				var cachedParts = [3]string{"", "", ""}
-				defaultParts, versionWildcardType := createVersionFromWildcard(vStr)
+				var cachedParts = versionParts{"", "", "", ""}
+				defaultParts, versionWildcardType, _ := createVersionFromWildcard(vStr)
 				var resultOperator string = ""
 				var shouldIncrementVersion bool = false
 
@@ -522,8 +542,8 @@ func expandWildcardVersion(parts [][]string) ([][]string, error) {
 				case "-":
 					{
 						resultOperator = ">="
-						secondaryParts, _ := createVersionFromWildcard(strings.TrimSpace(ap[strings.IndexRune(ap, '-')+1:]))
-						newParts = append(newParts, "<"+joinTriple(secondaryParts, "."))
+						secondaryParts, _, _ := createVersionFromWildcard(strings.TrimSpace(ap[strings.IndexRune(ap, '-')+1:]))
+						newParts = append(newParts, "<"+joinParts(secondaryParts, "."))
 					}
 				case "^":
 					{
@@ -556,7 +576,7 @@ func expandWildcardVersion(parts [][]string) ([][]string, error) {
 
 								cachedParts[1] = strconv.Itoa(patch + 1)
 
-								newParts = append(newParts, "<"+joinTriple(cachedParts, "."))
+								newParts = append(newParts, "<"+joinParts(cachedParts, "."))
 							}
 
 						case minorWildcard:
@@ -569,7 +589,7 @@ func expandWildcardVersion(parts [][]string) ([][]string, error) {
 
 								cachedParts[0] = strconv.Itoa(patch + 1)
 
-								newParts = append(newParts, "<"+joinTriple(cachedParts, "."))
+								newParts = append(newParts, "<"+joinParts(cachedParts, "."))
 							}
 
 						}
@@ -586,11 +606,11 @@ func expandWildcardVersion(parts [][]string) ([][]string, error) {
 					resultOperator = "<"
 					shouldIncrementVersion = true
 				case "", "=", "==":
-					newParts = append(newParts, ">="+joinTriple(defaultParts, "."))
+					newParts = append(newParts, ">="+joinParts(defaultParts, "."))
 					resultOperator = "<"
 					shouldIncrementVersion = true
 				case "!=", "!":
-					newParts = append(newParts, "<"+joinTriple(defaultParts, "."))
+					newParts = append(newParts, "<"+joinParts(defaultParts, "."))
 					resultOperator = ">="
 					shouldIncrementVersion = true
 				}
@@ -604,14 +624,14 @@ func expandWildcardVersion(parts [][]string) ([][]string, error) {
 						resultVersion, _ = incrementMajorVersion(defaultParts)
 					}
 				} else {
-					resultVersion = joinTriple(defaultParts, ".")
+					resultVersion = joinParts(defaultParts, ".")
 				}
 
 				newParts = append(newParts, resultOperator+resultVersion)
 				// Handle "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"
 			} else if isNumbersOrSpacesOnly(ap) {
-				defaultParts, _ := createVersionFromWildcard(ap)
-				newParts = append(newParts, joinTriple(defaultParts, "."))
+				defaultParts, _, _ := createVersionFromWildcard(ap)
+				newParts = append(newParts, joinParts(defaultParts, "."))
 			} else {
 				newParts = append(newParts, ap)
 			}
